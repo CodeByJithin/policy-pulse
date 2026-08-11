@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Login — Premium Collection Tracker</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="stylesheet" href="../css/variables.css">
+<link rel="stylesheet" href="../css/global.css">
+<link rel="stylesheet" href="../css/components.css">
+<link rel="stylesheet" href="../css/responsive.css">
+<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+</head>
+<body style="background:var(--color-bg)">
+  <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:var(--sp-4)">
+    <div class="card" style="width:100%;max-width:400px">
+      <div class="flex-gap mb-4" style="justify-content:center">
+        <span class="logo-dot" style="width:10px;height:10px;border-radius:50%;background:var(--color-primary)"></span>
+        <strong style="font-size:var(--fs-md)">Premium Collection Tracker</strong>
+      </div>
+      <div id="login-view">
+        <div class="form-group">
+          <label class="form-label">Email</label>
+          <input type="email" class="form-control" id="login-email" autocomplete="username" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Password</label>
+          <input type="password" class="form-control" id="login-password" autocomplete="current-password" required>
+        </div>
+        <button class="btn btn-primary btn-block" id="login-btn">Log In</button>
+        <div class="flex-between mt-3">
+          <button class="btn btn-ghost btn-sm" id="show-reset-btn" style="padding-left:0">Forgot password?</button>
+        </div>
+        <div id="login-error" class="form-error hidden mt-2"></div>
+      </div>
+      <div id="reset-view" class="hidden">
+        <p class="text-secondary mb-3" style="font-size:var(--fs-sm)">Enter your email and we'll send you a password reset link.</p>
+        <div class="form-group">
+          <label class="form-label">Email</label>
+          <input type="email" class="form-control" id="reset-email" required>
+        </div>
+        <button class="btn btn-primary btn-block" id="reset-btn">Send Reset Link</button>
+        <button class="btn btn-ghost btn-block mt-2" id="back-to-login-btn">Back to Login</button>
+        <div id="reset-msg" class="mt-2" style="font-size:var(--fs-sm)"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="../js/supabase.js"></script>
+  <script src="../js/utils.js"></script>
+  <script src="../js/auth.js"></script>
+  <script>
+    (async () => {
+      const { data: { session } } = await supabaseClient.auth.getSession();
+      if (session) window.location.href = 'dashboard.html';
+    })();
+
+    document.getElementById('login-btn').addEventListener('click', async (e) => {
+      const email = document.getElementById('login-email').value.trim();
+      const password = document.getElementById('login-password').value;
+      const errorEl = document.getElementById('login-error');
+      errorEl.classList.add('hidden');
+      if (!email || !password) { errorEl.textContent = 'Please enter your email and password.'; errorEl.classList.remove('hidden'); return; }
+      setButtonLoading(e.target, true, 'Logging in…');
+      try {
+        await loginWithPassword(email, password);
+        window.location.href = 'dashboard.html';
+      } catch (err) {
+        errorEl.textContent = err.message === 'Invalid login credentials' ? 'Incorrect email or password.' : friendlyError(err, 'Could not log in. Please try again.');
+        errorEl.classList.remove('hidden');
+        setButtonLoading(e.target, false);
+      }
+    });
+
+    document.getElementById('show-reset-btn').addEventListener('click', () => {
+      document.getElementById('login-view').classList.add('hidden');
+      document.getElementById('reset-view').classList.remove('hidden');
+    });
+    document.getElementById('back-to-login-btn').addEventListener('click', () => {
+      document.getElementById('reset-view').classList.add('hidden');
+      document.getElementById('login-view').classList.remove('hidden');
+    });
+    document.getElementById('reset-btn').addEventListener('click', async (e) => {
+      const email = document.getElementById('reset-email').value.trim();
+      const msgEl = document.getElementById('reset-msg');
+      if (!email) { msgEl.textContent = 'Please enter your email.'; msgEl.className = 'form-error mt-2'; return; }
+      setButtonLoading(e.target, true, 'Sending…');
+      try {
+        await sendPasswordReset(email);
+        msgEl.textContent = 'If an account exists for this email, a reset link has been sent.';
+        msgEl.className = 'text-success mt-2';
+      } catch (err) {
+        msgEl.textContent = friendlyError(err);
+        msgEl.className = 'form-error mt-2';
+      }
+      setButtonLoading(e.target, false);
+    });
+
+    // allow Enter key submit
+    document.getElementById('login-password').addEventListener('keydown', (e) => { if (e.key === 'Enter') document.getElementById('login-btn').click(); });
+  </script>
+</body>
+</html>

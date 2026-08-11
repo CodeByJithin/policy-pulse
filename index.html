@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Premium Collection Tracker</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+<script src="js/supabase.js"></script>
+</head>
+<body>
+<div style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;color:#5b6472;">Loading…</div>
+<script>
+  (async () => {
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    window.location.href = session ? 'pages/dashboard.html' : 'pages/login.html';
+  })();
+</script>
+</body>
+</html>
