@@ -12,17 +12,16 @@ function currentPageName() {
   return path.substring(path.lastIndexOf('/') + 1) || 'index.html';
 }
 
-function pathToRoot() {
-  // pages/*.html need one extra ../ to reach the project root
-  return currentPageName() === 'index.html' && !window.location.pathname.includes('/pages/') ? '' : '';
-}
-
 // Resolves the correct relative path to a page, whether we're currently
 // inside /pages/ or at the project root (index.html).
+//
+// index.html lives at the project root; every other page (login.html,
+// dashboard.html, etc.) lives inside /pages/ alongside the current page,
+// so from within /pages/ those need NO "../" prefix.
 function pageUrl(name) {
   const inPagesDir = window.location.pathname.includes('/pages/');
-  if (name === 'index.html' || name === 'login.html') {
-    return inPagesDir ? `../${name === 'index.html' ? 'index.html' : 'login.html'}` : name;
+  if (name === 'index.html') {
+    return inPagesDir ? '../index.html' : 'index.html';
   }
   return inPagesDir ? name : `pages/${name}`;
 }

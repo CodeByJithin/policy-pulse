@@ -77,8 +77,20 @@ function generateReminderMessage(type, schedule, extra = {}) {
     .replaceAll('{policy_number}', policyNumber);
 }
 
-// Opens WhatsApp click-to-chat in a new tab. Never marks anything as sent —
+// Opens WhatsApp click-to-chat. Never marks anything as sent —
 // that only happens when the agent explicitly confirms in-app.
+//
+// On mobile, we navigate the current tab (location.href) rather than
+// opening a new one. window.open('_blank') creates a separate browsing
+// context that can't reliably complete the wa.me -> whatsapp:// app
+// handoff on iOS/Android — it's what causes the blank "Done" screen some
+// mobile browsers show instead of actually switching to WhatsApp. On
+// desktop we keep window.open so WhatsApp Web opens in a new tab and the
+// agent doesn't lose their place in the app.
+function isMobileDevice() {
+  return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+}
+
 function openWhatsApp(phone, message) {
   const cleaned = cleanPhoneForWhatsApp(phone);
   if (!isValidPhoneForWhatsApp(cleaned)) {
@@ -86,7 +98,11 @@ function openWhatsApp(phone, message) {
     return false;
   }
   const url = `https://wa.me/${cleaned}?text=${encodeURIComponent(message)}`;
-  window.open(url, '_blank');
+  if (isMobileDevice()) {
+    window.location.href = url;
+  } else {
+    window.open(url, '_blank');
+  }
   return true;
 }
 
