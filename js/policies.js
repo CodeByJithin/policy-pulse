@@ -168,9 +168,26 @@ async function openPolicyFormModal(existing, presetCustomer, onSaved) {
             <input type="date" class="form-control" id="p-start" value="${existing?.policy_start_date || toDateInputValue(todayDateOnly())}" required>
           </div>
           <div class="form-group">
+            <label class="form-label">Policy End Date</label>
+            <input type="date" class="form-control" id="p-end" value="${existing?.policy_end_date || ''}">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">First Premium Date <span class="req">*</span></label>
+            <input type="date" class="form-control" id="p-first-premium" value="${existing?.first_premium_date || toDateInputValue(todayDateOnly())}" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Last Premium Date <span class="req">*</span></label>
+            <input type="date" class="form-control" id="p-last-premium" value="${existing?.last_premium_date || ''}" required>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
             <label class="form-label">Maturity Date</label>
             <input type="date" class="form-control" id="p-maturity" value="${existing?.maturity_date || ''}">
           </div>
+          <div></div>
         </div>
         ${isEdit ? `
         <div class="form-group">
@@ -184,16 +201,10 @@ async function openPolicyFormModal(existing, presetCustomer, onSaved) {
           <textarea class="form-control" id="p-notes" rows="2">${escapeHtml(existing?.notes || '')}</textarea>
         </div>
         ${!isEdit ? `
-        <div class="form-group">
-          <label class="form-label">Generate Premium Schedule For</label>
-          <select class="form-control" id="p-horizon">
-            <option value="6">Next 6 months</option>
-            <option value="12" selected>Next 12 months</option>
-            <option value="24">Next 24 months</option>
-            <option value="36">Next 36 months</option>
-          </select>
-          <div class="form-hint">Future installments will be created automatically based on the frequency above. You can generate more later.</div>
-        </div>` : ''}
+        <div class="form-hint mb-2">Premium Collection records will be generated automatically from the First Premium Date through the Last Premium Date, based on the payment frequency above — this happens once, when the policy is created.</div>
+        ` : `
+        <div class="form-hint mb-2">Changing these dates will not regenerate or remove existing Premium Collection records — the schedule was generated once at creation. Add or remove individual installments from the Premium Collection page if needed.</div>
+        `}
       </form>
     </div>
     <div class="modal-footer">
@@ -225,6 +236,9 @@ async function openPolicyFormModal(existing, presetCustomer, onSaved) {
     const amount = parseFloat(document.getElementById('p-amount').value);
     const frequency = document.getElementById('p-frequency').value;
     const startDate = document.getElementById('p-start').value;
+    const endDate = document.getElementById('p-end').value || null;
+    const firstPremiumDate = document.getElementById('p-first-premium').value;
+    const lastPremiumDate = document.getElementById('p-last-premium').value;
     const customerId = customerSelect.value;
 
     if (!customerId) { showError('Please select a customer.'); return; }
@@ -232,6 +246,9 @@ async function openPolicyFormModal(existing, presetCustomer, onSaved) {
     if (!amount || amount <= 0) { showError('Premium amount must be greater than zero.'); return; }
     if (!frequency) { showError('Payment frequency is required.'); return; }
     if (!startDate) { showError('Policy start date is required.'); return; }
+    if (!firstPremiumDate) { showError('First Premium Date is required.'); return; }
+    if (!lastPremiumDate) { showError('Last Premium Date is required.'); return; }
+    if (parseDateOnly(lastPremiumDate) < parseDateOnly(firstPremiumDate)) { showError('Last Premium Date cannot be before First Premium Date.'); return; }
 
     const payload = {
       customer_id: customerId,
@@ -240,7 +257,10 @@ async function openPolicyFormModal(existing, presetCustomer, onSaved) {
       premium_amount: amount,
       payment_frequency: frequency,
       policy_start_date: startDate,
-      next_due_date: startDate,
+      policy_end_date: endDate,
+      first_premium_date: firstPremiumDate,
+      last_premium_date: lastPremiumDate,
+      next_due_date: firstPremiumDate,
       maturity_date: document.getElementById('p-maturity').value || null,
       notes: document.getElementById('p-notes').value.trim() || null
     };
@@ -260,9 +280,10 @@ async function openPolicyFormModal(existing, presetCustomer, onSaved) {
         if (error) throw error;
         policyRow = data;
         showSuccess('Policy created successfully.');
-        const horizon = parseInt(document.getElementById('p-horizon').value, 10);
+        // Premium Collection records are generated exactly once, right here,
+        // at creation time — never re-run on subsequent edits.
         try {
-          const { inserted } = await generatePremiumSchedule(policyRow, horizon);
+          const { inserted } = await generatePremiumSchedule(policyRow);
           if (inserted > 0) showSuccess(`${inserted} premium installments generated.`);
         } catch (schedErr) {
           showError(friendlyError(schedErr, 'Policy was created, but the premium schedule could not be generated.'));

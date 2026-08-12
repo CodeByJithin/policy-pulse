@@ -95,14 +95,46 @@ create table if not exists policies (
   premium_amount numeric(12,2) not null check (premium_amount > 0),
   payment_frequency payment_frequency not null,
   policy_start_date date not null,
+  first_premium_date date not null,
+  last_premium_date date not null,
   next_due_date date not null,
+  policy_end_date date,
   maturity_date date,
   status policy_status not null default 'active',
   notes text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  unique (agent_id, policy_number)
+  unique (agent_id, policy_number),
+  constraint policies_premium_range_chk check (last_premium_date >= first_premium_date)
 );
+
+-- ----------------------------------------------------------------------------
+-- MIGRATION: adds first_premium_date / last_premium_date / policy_end_date
+-- to a `policies` table created by an earlier version of this schema.
+-- Safe to run on a brand-new database too (every step is a no-op there).
+-- ----------------------------------------------------------------------------
+alter table policies add column if not exists first_premium_date date;
+alter table policies add column if not exists last_premium_date date;
+alter table policies add column if not exists policy_end_date date;
+
+-- Backfill any pre-existing rows so the NOT NULL constraints below can be applied.
+update policies set first_premium_date = policy_start_date where first_premium_date is null;
+update policies set last_premium_date = greatest(policy_start_date, next_due_date) + interval '1 year'
+  where last_premium_date is null;
+
+do $$ begin
+  alter table policies alter column first_premium_date set not null;
+exception when others then null; end $$;
+
+do $$ begin
+  alter table policies alter column last_premium_date set not null;
+exception when others then null; end $$;
+
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'policies_premium_range_chk') then
+    alter table policies add constraint policies_premium_range_chk check (last_premium_date >= first_premium_date);
+  end if;
+end $$;
 
 -- ----------------------------------------------------------------------------
 -- premium_schedules
@@ -143,9 +175,16 @@ create table if not exists payments (
   created_at timestamptz not null default now()
 );
 
-alter table premium_schedules
-  add constraint premium_schedules_payment_id_fkey
-  foreign key (payment_id) references payments(id) on delete set null;
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint where conname = 'premium_schedules_payment_id_fkey'
+  ) then
+    alter table premium_schedules
+      add constraint premium_schedules_payment_id_fkey
+      foreign key (payment_id) references payments(id) on delete set null;
+  end if;
+end $$;
 
 -- ----------------------------------------------------------------------------
 -- whatsapp_reminders

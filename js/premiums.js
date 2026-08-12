@@ -10,30 +10,34 @@ function addMonths(dateStr, months) {
   return toDateInputValue(result);
 }
 
-// Builds the list of {due_date, amount} installments for a policy, starting
-// from start_date, for the requested horizon (in months). Does not touch
-// the database — see insertPremiumSchedule for that.
-function buildScheduleInstallments(startDate, amount, frequency, horizonMonths) {
+// Builds the list of {due_date, amount} installments for a policy, stepping
+// from first_premium_date to last_premium_date (inclusive) at the given
+// frequency. A generous iteration cap guards against bad input creating a
+// runaway loop (e.g. a last_premium_date far in the future).
+function buildScheduleInstallments(firstPremiumDate, lastPremiumDate, amount, frequency) {
   const step = FREQ_MONTHS[frequency];
   if (!step) throw new Error('Unknown payment frequency');
+  const end = parseDateOnly(lastPremiumDate);
   const installments = [];
-  let cursor = startDate;
-  let monthsElapsed = 0;
-  while (monthsElapsed <= horizonMonths) {
+  let cursor = firstPremiumDate;
+  let guard = 0;
+  while (parseDateOnly(cursor) <= end && guard < 600) {
     installments.push({ due_date: cursor, amount });
     cursor = addMonths(cursor, step);
-    monthsElapsed += step;
+    guard++;
   }
   return installments;
 }
 
-// Inserts schedule rows for a policy, skipping any due_date that already
+// Inserts schedule rows for a policy covering policy.first_premium_date
+// through policy.last_premium_date, skipping any due_date that already
 // exists for that policy (relies on the unique(policy_id, due_date)
 // constraint as the source of truth, but also pre-filters to avoid noisy
-// duplicate-key errors).
-async function generatePremiumSchedule(policy, horizonMonths) {
+// duplicate-key errors). Intended to run exactly once, at policy creation —
+// callers should not invoke this again on edit.
+async function generatePremiumSchedule(policy) {
   const installments = buildScheduleInstallments(
-    policy.policy_start_date, policy.premium_amount, policy.payment_frequency, horizonMonths
+    policy.first_premium_date, policy.last_premium_date, policy.premium_amount, policy.payment_frequency
   );
 
   const { data: existing, error: existingErr } = await supabaseClient
