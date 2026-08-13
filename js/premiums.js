@@ -36,6 +36,18 @@ function buildScheduleInstallments(firstPremiumDate, lastPremiumDate, amount, fr
 // duplicate-key errors). Intended to run exactly once, at policy creation —
 // callers should not invoke this again on edit.
 async function generatePremiumSchedule(policy) {
+  // Fails loudly and specifically rather than silently producing zero rows.
+  // The most common real-world cause of "no installments generated" is the
+  // policies table not yet having first_premium_date/last_premium_date
+  // populated — usually because schema.sql hasn't been re-run against the
+  // live database since these columns were added.
+  if (!policy.first_premium_date || !policy.last_premium_date) {
+    throw new Error('This policy record is missing its First/Last Premium Date — make sure the latest schema.sql (with the first_premium_date/last_premium_date columns) has been run against your Supabase database, then edit and re-save this policy.');
+  }
+  if (!FREQ_MONTHS[policy.payment_frequency]) {
+    throw new Error(`Unrecognized payment frequency "${policy.payment_frequency}" — expected one of monthly, quarterly, half_yearly, yearly.`);
+  }
+
   const installments = buildScheduleInstallments(
     policy.first_premium_date, policy.last_premium_date, policy.premium_amount, policy.payment_frequency
   );
@@ -215,6 +227,7 @@ function rowToTr(r) {
           <button class="btn btn-ghost btn-sm act-view" data-id="${r.id}">View</button>
           ${status !== 'paid' ? `<button class="btn btn-whatsapp btn-sm act-wa" data-id="${r.id}">WhatsApp</button>
           <button class="btn btn-success btn-sm act-paid" data-id="${r.id}">Mark Paid</button>` : ''}
+          <button class="btn btn-secondary btn-sm act-followup" data-id="${r.id}" data-customer-id="${r.customer_id}" data-policy-id="${r.policy_id}" data-agent-id="${r.agent_id}" data-customer-name="${escapeHtml(r.customers?.full_name || '')}">Follow-up</button>
           <button class="btn btn-ghost btn-sm text-danger act-delete" data-id="${r.id}">Delete</button>
         </div>
       </td>
@@ -235,6 +248,7 @@ function rowToCard(r) {
         <button class="btn btn-ghost btn-sm act-view" data-id="${r.id}">View</button>
         ${status !== 'paid' ? `<button class="btn btn-whatsapp btn-sm act-wa" data-id="${r.id}">WhatsApp</button>
         <button class="btn btn-success btn-sm act-paid" data-id="${r.id}">Mark Paid</button>` : ''}
+        <button class="btn btn-secondary btn-sm act-followup" data-id="${r.id}" data-customer-id="${r.customer_id}" data-policy-id="${r.policy_id}" data-agent-id="${r.agent_id}" data-customer-name="${escapeHtml(r.customers?.full_name || '')}">Follow-up</button>
         <button class="btn btn-ghost btn-sm text-danger act-delete" data-id="${r.id}">Delete</button>
       </div>
     </div>
@@ -246,6 +260,13 @@ function wirePremiumRowActions() {
   document.querySelectorAll('.act-paid').forEach(btn => btn.addEventListener('click', () => openMarkPaidModal(btn.dataset.id, loadPremiumTable)));
   document.querySelectorAll('.act-view').forEach(btn => btn.addEventListener('click', () => openPremiumDetailModal(btn.dataset.id)));
   document.querySelectorAll('.act-delete').forEach(btn => btn.addEventListener('click', () => deletePremiumSchedule(btn.dataset.id, loadPremiumTable)));
+  document.querySelectorAll('.act-followup').forEach(btn => btn.addEventListener('click', () => openFollowUpFormModal({
+    customer_id: btn.dataset.customerId,
+    policy_id: btn.dataset.policyId,
+    premium_schedule_id: btn.dataset.id,
+    agent_id: btn.dataset.agentId,
+    customer_name: btn.dataset.customerName
+  }, loadPremiumTable)));
 }
 
 // Permanently deletes a single premium installment. If it was already paid,
@@ -303,9 +324,20 @@ async function openPremiumDetailModal(scheduleId) {
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost text-danger" id="premium-delete-btn" style="margin-right:auto">Delete</button>
+      <button class="btn btn-secondary" id="premium-followup-btn">Add Follow-up</button>
       <button class="btn btn-secondary" onclick="closeModal()">Close</button>
     </div>
   `, { size: 'lg' });
+
+  document.getElementById('premium-followup-btn').addEventListener('click', () => {
+    openFollowUpFormModal({
+      customer_id: r.customer_id,
+      policy_id: r.policy_id,
+      premium_schedule_id: r.id,
+      agent_id: r.agent_id,
+      customer_name: r.customers?.full_name
+    }, () => openPremiumDetailModal(scheduleId));
+  });
 
   document.getElementById('premium-delete-btn').addEventListener('click', async () => {
     closeModal();

@@ -336,14 +336,17 @@ async function initCustomerDetailsPage() {
     </div>
 
     <div class="card">
-      <h4 class="mb-3">Follow-ups</h4>
+      <div class="flex-between mb-3"><h4>Follow-ups</h4><button class="btn btn-primary btn-sm" id="add-followup-from-cust">+ Add Follow-up</button></div>
       ${(followups && followups.length) ? `
         <div class="action-list">
           ${followups.map(f => `
             <div class="action-list-item">
               <div class="ali-main"><div class="ali-title">${escapeHtml(f.notes || FOLLOWUP_TYPE_LABELS[f.follow_up_type])}</div>
               <div class="ali-sub">${formatDate(f.follow_up_date)} · ${FOLLOWUP_TYPE_LABELS[f.follow_up_type]}</div></div>
-              <span class="badge badge-${f.status === 'completed' ? 'active' : f.status === 'pending' ? 'due_today' : 'upcoming'}">${f.status}</span>
+              <div class="flex-gap">
+                <span class="badge badge-${f.status === 'completed' ? 'active' : f.status === 'pending' ? 'due_today' : 'upcoming'}">${f.status}</span>
+                <button class="btn btn-ghost btn-sm edit-followup-btn" data-id="${f.id}">Edit</button>
+              </div>
             </div>
           `).join('')}
         </div>
@@ -360,4 +363,12 @@ async function initCustomerDetailsPage() {
   document.getElementById('add-policy-from-cust').addEventListener('click', () => {
     openPolicyFormModal(null, customer, () => initCustomerDetailsPage());
   });
+  document.getElementById('add-followup-from-cust').addEventListener('click', () => {
+    openFollowUpFormModal({ customer_id: customer.id, agent_id: customer.agent_id, customer_name: customer.full_name }, () => initCustomerDetailsPage());
+  });
+  document.querySelectorAll('.edit-followup-btn').forEach(btn => btn.addEventListener('click', async () => {
+    const { data: fu, error } = await supabaseClient.from('follow_ups').select('*').eq('id', btn.dataset.id).single();
+    if (error) { showError(friendlyError(error)); return; }
+    openFollowUpFormModal(fu, () => initCustomerDetailsPage());
+  }));
 }

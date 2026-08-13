@@ -174,6 +174,7 @@ async function loadTodaysFollowUps() {
         <button class="btn btn-secondary btn-sm fu-call" data-phone="${escapeHtml(f.customers?.mobile || '')}">Call</button>
         <button class="btn btn-whatsapp btn-sm fu-wa" data-phone="${escapeHtml(f.customers?.mobile || '')}" data-name="${escapeHtml(f.customers?.full_name || '')}">WhatsApp</button>
         <button class="btn btn-success btn-sm fu-complete" data-id="${f.id}">Complete</button>
+        <button class="btn btn-ghost btn-sm fu-edit" data-id="${f.id}">Edit</button>
         <button class="btn btn-ghost btn-sm fu-reschedule" data-id="${f.id}">Reschedule</button>
       </div>
     </div>
@@ -183,6 +184,11 @@ async function loadTodaysFollowUps() {
   el.querySelectorAll('.fu-wa').forEach(btn => btn.addEventListener('click', () => openWhatsApp(btn.dataset.phone, `Hello ${btn.dataset.name}, `)));
   el.querySelectorAll('.fu-complete').forEach(btn => btn.addEventListener('click', () => completeFollowUp(btn.dataset.id, loadTodaysFollowUps)));
   el.querySelectorAll('.fu-reschedule').forEach(btn => btn.addEventListener('click', () => openRescheduleFollowUpModal(btn.dataset.id, loadTodaysFollowUps)));
+  el.querySelectorAll('.fu-edit').forEach(btn => btn.addEventListener('click', async () => {
+    const row = data.find(r => r.id === btn.dataset.id);
+    if (!row) return;
+    openFollowUpFormModal({ ...row, customer_name: row.customers?.full_name }, loadTodaysFollowUps);
+  }));
 }
 
 async function loadPromiseToPay() {
